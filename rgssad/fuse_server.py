@@ -256,7 +256,8 @@ def main():
     )
     fuse_options = set(llfuse.default_options)
     fuse_options.add('ro')
-    fuse_options.add('fsname=rgssad-fuse')
+    fuse_options.add('subtype=rgssad-fuse')
+    fuse_options.add('fsname={}'.format(args.rgssad.replace(',', r'\,')))
     if args.debug_fuse:
         fuse_options.add('debug')
 
