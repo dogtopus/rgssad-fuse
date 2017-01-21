@@ -25,17 +25,9 @@ class Archive(object):
         self._build_directory_tree()
 
     def _parse_metadata(self):
-        arc_size = os.path.getsize(self.filename)
-        with open(self.filename, 'rb') as arc:
-            # check magic
-            magic, ver = struct.unpack('<6sxB', arc.read(8))
-            if magic != b'RGSSAD' or ver not in (1, 2):
-                self.logger.error('Invalid magic=%s ver=%d', magic, ver)
-                raise RuntimeError('Unsupported file type')
-
+        def _parser_v1(arc):
             magickey = crypto.MagicKeyFactory()
             xorer = crypto.XORer(arc, magickey)
-
             while arc.tell() < arc_size:
                 # Extract file paths
                 fn_len = xorer.read_32bits(1)[0]
@@ -44,6 +36,35 @@ class Archive(object):
                 self.logger.debug('fn_len=%d fn=%s f_size=%d, key=0x%08x', fn_len, fn, f_size, magickey.get_key())
                 yield fn.decode('utf-8'), arc.tell(), f_size, magickey.get_key()
                 arc.seek(f_size, io.SEEK_CUR)
+            arc_size = os.path.getsize(self.filename)
+
+        def _parser_v3(arc):
+            metadata_key_seed = struct.unpack('<I', arc.read(4))[0]
+            metadata_key = (metadata_key_seed * 9 + 3) & 0xffffffff
+            self.logger.debug('Using metadata_key=0x%08x', metadata_key)
+            xorer = crypto.XORer(arc, crypto.StaticMagicKeyFactory(iv=metadata_key))
+            while True:
+                f_offset, f_size, subkey, fn_len = xorer.read_32bits(4)
+                self.logger.debug('fn_len=%d, f_offset=%d, f_size=%d, key=0x%08x', fn_len, f_offset, f_size, subkey)
+                if f_offset == 0:
+                    break
+                fn = xorer.read_32bits_unaligned(fn_len)
+                self.logger.debug('fn=%s', fn)
+                yield fn.decode('utf-8'), f_offset, f_size, subkey
+
+        with open(self.filename, 'rb') as arc:
+            # check magic
+            magic, ver = struct.unpack('<6sxB', arc.read(8))
+            if magic != b'RGSSAD' or ver not in (1, 2, 3):
+                self.logger.error('Invalid magic=%s ver=%d', magic, ver)
+                raise RuntimeError('Unsupported file type')
+            elif ver in (1, 2):
+                yield from _parser_v1(arc)
+            elif ver == 3:
+                yield from _parser_v3(arc)
+            else:
+                assert False, 'Something went wrong on version checking'
+                yield from tuple()
 
     def _build_directory_tree(self):
         '''Extract the list of files and build directory tree'''
@@ -134,23 +155,6 @@ class Archive(object):
                     entry['offset'],
                     entry['size'],
                     entry['magickey'])
-
-
-class Archive3(Archive):
-    def _parse_metadata(self):
-        arc_size = os.path.getsize(self.filename)
-        with open(self.filename, 'rb') as arc:
-            # check magic
-            magic, ver = struct.unpack('<6sxB', arc.read(8))
-            if magic != b'RGSSAD' or ver != 3:
-                self.logger.error('Invalid magic=%s ver=%d', magic, ver)
-                raise RuntimeError('Unsupported file type')
-
-            metadata_key_seed = struct.unpack('<I', arc.read(4))[0]
-            metadata_key = (metadata_key_seed * 9 + 3) & 0xffffffff
-            xorer = crypto.XORer(arc, crypto.MagicKeyFactory(iv=metadata_key))
-
-            # TODO: The actual parsing part
 
 
 class File(io.FileIO):

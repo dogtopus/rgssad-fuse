@@ -55,6 +55,30 @@ class MagicKeyFactory(object):
         self.key = self.iv
 
 
+class StaticMagicKeyFactory(object):
+    def __init__(self, iv=0xdeadcafe):
+        self.logger = logging.getLogger('rgssad.StaticMagicKeyFactory')
+        self.key = iv
+
+    def get_next(self):
+        return self.key
+
+    def get_key(self):
+        return self.key
+
+    def skip(self, count):
+        '''Does nothing'''
+        pass
+
+    def one_step_rollback(self):
+        '''Does nothing'''
+        pass
+
+    def reset(self):
+        '''Does nothing'''
+        pass
+
+
 class XORer(object):
     '''
     Decrypt XORed data

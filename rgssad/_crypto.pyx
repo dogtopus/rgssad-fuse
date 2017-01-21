@@ -1,4 +1,5 @@
 # TODO implement a native version of XORer
+from crypto import StaticMagicKeyFactory
 from crypto import XORer
 
 cdef class MagicKeyFactory:
