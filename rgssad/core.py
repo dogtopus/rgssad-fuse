@@ -28,6 +28,7 @@ class Archive(object):
         def _parser_v1(arc):
             magickey = crypto.MagicKeyFactory()
             xorer = crypto.XORer(arc, magickey)
+            arc_size = os.path.getsize(self.filename)
             while arc.tell() < arc_size:
                 # Extract file paths
                 fn_len = xorer.read_32bits(1)[0]
@@ -36,7 +37,6 @@ class Archive(object):
                 self.logger.debug('fn_len=%d fn=%s f_size=%d, key=0x%08x', fn_len, fn, f_size, magickey.get_key())
                 yield fn.decode('utf-8'), arc.tell(), f_size, magickey.get_key()
                 arc.seek(f_size, io.SEEK_CUR)
-            arc_size = os.path.getsize(self.filename)
 
         def _parser_v3(arc):
             metadata_key_seed = struct.unpack('<I', arc.read(4))[0]
