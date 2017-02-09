@@ -5,9 +5,8 @@ import logging
 class MagicKeyFactory(object):
     def __init__(self, iv=0xdeadcafe):
         self.logger = logging.getLogger('rgssad.MagicKeyFactory')
+        self.key = 0
         self.iv = iv
-        # HACK
-        self.prev_key = 0
         self.reset()
 
     def get_key(self):
@@ -16,7 +15,6 @@ class MagicKeyFactory(object):
     def get_next(self):
         key = self.key
         #self.logger.debug('key: %d', key)
-        self.prev_key = self.key
         self._transform()
         return key
 
@@ -40,15 +38,19 @@ class MagicKeyFactory(object):
         self.key += 3
         self.key &= 0xffffffff
 
+    def _transform_backwards(self):
+        self.key -= 3
+        # 0xb6db6db7 = inv(7) (mod 0x100000000)
+        self.key *= 0xb6db6db7
+        self.key &= 0xffffffff
+
     def _transform4(self):
         self.key *= 2401
         self.key += 1200
         self.key &= 0xffffffff
 
-    # HACK
     def one_step_rollback(self):
-        self.logger.debug('rolling key back (%d -> %d)', self.key, self.prev_key)
-        self.key = self.prev_key
+        self._transform_backwards()
 
     def reset(self):
         self.logger.debug('key reset')
