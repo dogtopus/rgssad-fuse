@@ -33,6 +33,11 @@ class MagicKeyFactory(object):
             for i in range(count):
                 self._transform()
 
+    def rewind(self, count):
+        self.logger.debug('rewind %d block(s)', count)
+        for i in range(count):
+            self._transform_backwards()
+
     def _transform(self):
         self.key *= 7
         self.key += 3

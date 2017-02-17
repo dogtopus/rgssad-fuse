@@ -22,7 +22,12 @@ cdef class MagicKeyFactory:
     cpdef skip(self, unsigned int count):
         cdef unsigned int i = 0
         for i in range(count):
-            self.get_next()
+            self._transform()
+
+    cpdef rewind(self, unsigned int count):
+        cdef unsigned int i = 0
+        for i in range(count):
+            self._transform_backwards()
 
     cdef _transform(self):
         self.key *= 7

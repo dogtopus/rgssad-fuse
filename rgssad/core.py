@@ -180,6 +180,19 @@ class File(io.FileIO):
         return data
 
     def seek(self, offset, whence=io.SEEK_SET):
+        def _seek_to_block_absolute(base_offset, seek_offset):
+            return (base_offset + seek_offset) // 4
+
+        def _rewind_or_reset_skip(from_block, to_block):
+            assert to_block <= from_block
+            if to_block >= (from_block >> 1):
+                # Near base offset
+                self.magickey.rewind(from_block - to_block)
+            else:
+                # Far from base offset
+                self.magickey.reset()
+                self.magickey.skip(to_block)
+
         if (whence == io.SEEK_SET and offset < 0) or \
                 (whence == io.SEEK_CUR and (offset + self.tell()) < 0) or \
                 (whence == io.SEEK_END and (offset + self.vfile_length) < 0):
@@ -203,8 +216,7 @@ class File(io.FileIO):
         # Seek from beginning, offset is smaller than current offset
         # Reset & skip as-is
         elif whence == io.SEEK_SET and block_count < cur_block:
-            self.magickey.reset()
-            self.magickey.skip(block_count)
+            _rewind_or_reset_skip(cur_block, block_count)
             offset_real += self.vfile_base
 
         # Seek from current offset, positive direction
@@ -215,14 +227,18 @@ class File(io.FileIO):
         # Seek from current offset, negative direction
         # Reset & skip to the absolute block
         elif whence == io.SEEK_CUR and block_count < 0:
-            self.magickey.reset()
-            self.magickey.skip((self.tell() + offset) // 4)
+            _rewind_or_reset_skip(
+                cur_block,
+                _seek_to_block_absolute(self.tell(), offset)
+            )
 
         # Seek from eof
         # Reset & skip to the absolute block
         elif whence == io.SEEK_END:
-            self.magickey.reset()
-            self.magickey.skip((self.vfile_length + offset) // 4)
+            _rewind_or_reset_skip(
+                self.vfile_length // 4,
+                _seek_to_block_absolute(self.vfile_length, offset)
+            )
 
         super().seek(offset_real, whence)
         return self.tell()
