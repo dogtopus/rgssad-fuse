@@ -1,12 +1,15 @@
 # TODO implement a native version of XORer
+import logging
 from crypto import StaticMagicKeyFactory
 from crypto import XORer
 
 cdef class MagicKeyFactory:
     cdef unsigned int iv
     cdef unsigned int key
+    cpdef object logger
 
     def __init__(self, unsigned int iv=0xdeadcafe):
+        self.logger = logging.getLogger('rgssad.MagicKeyFactory')
         self.iv = iv
         self.key = 0
         self.reset()
@@ -21,11 +24,13 @@ cdef class MagicKeyFactory:
 
     cpdef skip(self, unsigned int count):
         cdef unsigned int i = 0
+        self.logger.debug('skip %d block(s)', count)
         for i in range(count):
             self._transform()
 
     cpdef rewind(self, unsigned int count):
         cdef unsigned int i = 0
+        self.logger.debug('rewind %d block(s)', count)
         for i in range(count):
             self._transform_backwards()
 
@@ -42,5 +47,6 @@ cdef class MagicKeyFactory:
         self._transform_backwards()
 
     cpdef reset(self):
+        self.logger.debug('key reset')
         self.key = self.iv
 
