@@ -74,7 +74,9 @@ cdef class XORer:
             buf[i] ^= (self.magickey_obj.get_next() & 0xff)
 
     cdef void _read_32bits(self, unsigned int *buf, unsigned int count):
-        pass
+        fread(<void *>buf, sizeof(int), count, self._io_handle)
+        for i in range(count):
+            buf[i] ^= self.magickey_obj.get_next()
 
     def read_8bits(self, unsigned int count):
         cdef unsigned int i
