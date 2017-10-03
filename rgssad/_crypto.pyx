@@ -73,6 +73,9 @@ cdef class XORer:
         for i in range(count):
             buf[i] ^= (self.magickey_obj.get_next() & 0xff)
 
+    cdef void _read_32bits(self, unsigned int *buf, unsigned int count):
+        pass
+
     def read_8bits(self, unsigned int count):
         cdef unsigned int i
         cdef object result
@@ -84,6 +87,22 @@ cdef class XORer:
                 raise MemoryError("Cannot allocate buffer")
             self._read_8bits(buf, count)
             result = tuple(buf[i] for i in range(count))
+        finally:
+            if buf != NULL:
+                free(buf)
+
+        return result
+
+    def read_data_8bit(self, unsigned int count):
+        cdef bytes result
+        cdef unsigned char *buf
+
+        try:
+            buf = <unsigned char *> malloc(count * sizeof(char))
+            if buf == NULL:
+                raise MemoryError("Cannot allocate buffer")
+            self._read_8bits(buf, count)
+            result = buf[:(count * sizeof(char))]
         finally:
             if buf != NULL:
                 free(buf)
