@@ -1,8 +1,9 @@
 # TODO implement a native version of XORer
 import logging
 from crypto import StaticMagicKeyFactory
-from libc.stdio cimport fdopen, fread, fseek, SEEK_CUR, FILE
+from libc.stdio cimport fdopen, fread, fseek, ftell, SEEK_CUR, SEEK_SET, FILE, printf
 from libc.stdlib cimport malloc, free
+from libc.string cimport memset
 
 #from crypto import XORer
 
@@ -68,18 +69,36 @@ cdef class XORer:
         self._io_handle = fdopen(io_obj.fileno(), 'rb')
         if self._io_handle == NULL:
             raise MemoryError("Cannot attach to file descriptor")
+        self._pull_offset()
+        self._push_offset()
+
+    cdef inline void _pull_offset(self):
+        self.logger.debug("pull: %d -> %d", ftell(self._io_handle), self.io_obj.tell())
+        fseek(self._io_handle, self.io_obj.tell(), SEEK_SET)
+        self.logger.debug("py: %d, c: %d", ftell(self._io_handle), self.io_obj.tell())
+
+    cdef inline void _push_offset(self):
+        self.logger.debug("push: %d -> %d", self.io_obj.tell(), ftell(self._io_handle))
+        self.io_obj.seek(ftell(self._io_handle))
+        self.logger.debug("py: %d, c: %d", ftell(self._io_handle), self.io_obj.tell())
 
     cdef void _read_8bits(self, unsigned char *buf, unsigned int count):
         cdef unsigned int i
+        self._pull_offset()
+        self.logger.debug("read %d bytes", count)
         fread(<void *>buf, sizeof(unsigned char), count, self._io_handle)
         for i in range(count):
             buf[i] ^= (self.magickey_obj.get_next() & 0xff)
+        self._push_offset()
 
     cdef void _read_32bits(self, unsigned int *buf, unsigned int count):
         cdef unsigned int i
+        self._pull_offset()
+        self.logger.debug("read %d ints", count)
         fread(<void *>buf, sizeof(unsigned int), count, self._io_handle)
         for i in range(count):
             buf[i] ^= self.magickey_obj.get_next()
+        self._push_offset()
 
     cdef void _read_32bits_unaligned(self,
                                      unsigned int *buf,
@@ -88,13 +107,14 @@ cdef class XORer:
                                      char rollback,
                                      unsigned int left_offset):
         cdef unsigned int i
-
+        self._pull_offset()
         fread(<void *> &((<unsigned char *> buf)[left_offset]), sizeof(unsigned char), count_bytes, self._io_handle)
         for i in range(count):
             buf[i] ^= self.magickey_obj.get_next()
 
         if rollback != 0:
             self.magickey_obj.one_step_rollback()
+        self._push_offset()
 
     def read_8bits(self, unsigned int count):
         cdef unsigned int i
@@ -121,6 +141,7 @@ cdef class XORer:
             buf = <unsigned char *> malloc(count * sizeof(unsigned char))
             if buf == NULL:
                 raise MemoryError("Cannot allocate buffer")
+            memset(<void *> buf, 0, count * sizeof(unsigned char))
             self._read_8bits(buf, count)
             result = buf[:(count * sizeof(unsigned char))]
         finally:
@@ -138,8 +159,9 @@ cdef class XORer:
             buf = <unsigned int *> malloc(count * sizeof(unsigned int))
             if buf == NULL:
                 raise MemoryError("Cannot allocate buffer")
+            memset(<void *> buf, 0, count * sizeof(unsigned int))
             self._read_32bits(buf, count)
-            result = tuple((<unsigned char *> buf)[i] for i in range(count * sizeof(unsigned int)))
+            result = tuple(buf[i] for i in range(count * sizeof(unsigned int)))
         finally:
             if buf != NULL:
                 free(buf)
@@ -163,6 +185,7 @@ cdef class XORer:
             buf = <unsigned int *> malloc(count * sizeof(unsigned int))
             if buf == NULL:
                 raise MemoryError("Cannot allocate buffer")
+            memset(<void *> buf, 0, count * sizeof(unsigned int))
             self._read_32bits_unaligned(buf, count, count_bytes, rollback, left_offset)
             result = (<unsigned char *> buf)[left_offset:left_offset+count]
         finally:
