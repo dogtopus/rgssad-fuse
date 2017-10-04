@@ -1,8 +1,9 @@
 # TODO implement a native version of XORer
 import logging
 from crypto import StaticMagicKeyFactory
-from libc.stdio cimport fdopen, fread, FILE
+from libc.stdio cimport fdopen, fread, fseek, SEEK_CUR, FILE
 from libc.stdlib cimport malloc, free
+
 #from crypto import XORer
 
 cdef class MagicKeyFactory:
@@ -69,14 +70,31 @@ cdef class XORer:
             raise MemoryError("Cannot attach to file descriptor")
 
     cdef void _read_8bits(self, unsigned char *buf, unsigned int count):
-        fread(<void *>buf, sizeof(char), count, self._io_handle)
+        cdef unsigned int i
+        fread(<void *>buf, sizeof(unsigned char), count, self._io_handle)
         for i in range(count):
             buf[i] ^= (self.magickey_obj.get_next() & 0xff)
 
     cdef void _read_32bits(self, unsigned int *buf, unsigned int count):
-        fread(<void *>buf, sizeof(int), count, self._io_handle)
+        cdef unsigned int i
+        fread(<void *>buf, sizeof(unsigned int), count, self._io_handle)
         for i in range(count):
             buf[i] ^= self.magickey_obj.get_next()
+
+    cdef void _read_32bits_unaligned(self,
+                                     unsigned int *buf,
+                                     unsigned int count,
+                                     unsigned int count_bytes,
+                                     char rollback,
+                                     unsigned int left_offset):
+        cdef unsigned int i
+
+        fread(<void *> &((<unsigned char *> buf)[left_offset]), sizeof(unsigned char), count_bytes, self._io_handle)
+        for i in range(count):
+            buf[i] ^= self.magickey_obj.get_next()
+
+        if rollback != 0:
+            self.magickey_obj.one_step_rollback()
 
     def read_8bits(self, unsigned int count):
         cdef unsigned int i
@@ -84,7 +102,7 @@ cdef class XORer:
         cdef unsigned char *buf
 
         try:
-            buf = <unsigned char *> malloc(count * sizeof(char))
+            buf = <unsigned char *> malloc(count * sizeof(unsigned char))
             if buf == NULL:
                 raise MemoryError("Cannot allocate buffer")
             self._read_8bits(buf, count)
@@ -100,11 +118,53 @@ cdef class XORer:
         cdef unsigned char *buf
 
         try:
-            buf = <unsigned char *> malloc(count * sizeof(char))
+            buf = <unsigned char *> malloc(count * sizeof(unsigned char))
             if buf == NULL:
                 raise MemoryError("Cannot allocate buffer")
             self._read_8bits(buf, count)
-            result = buf[:(count * sizeof(char))]
+            result = buf[:(count * sizeof(unsigned char))]
+        finally:
+            if buf != NULL:
+                free(buf)
+
+        return result
+
+    def read_32bits(self, unsigned int count):
+        cdef unsigned int i
+        cdef object result
+        cdef unsigned int *buf
+
+        try:
+            buf = <unsigned int *> malloc(count * sizeof(unsigned int))
+            if buf == NULL:
+                raise MemoryError("Cannot allocate buffer")
+            self._read_32bits(buf, count)
+            result = tuple((<unsigned char *> buf)[i] for i in range(count * sizeof(unsigned int)))
+        finally:
+            if buf != NULL:
+                free(buf)
+
+        return result
+
+    def read_32bits_unaligned(self, unsigned int count_bytes, unsigned int left_offset=0):
+        cdef unsigned int *buf
+        cdef unsigned int count
+        cdef unsigned char rollback
+
+        count = count_bytes + left_offset
+        rollback = <char> count % 4
+        if count % 4 != 0:
+            count /= 4
+            count += 1
+        else:
+            count /= 4
+
+        try:
+            buf = <unsigned int *> malloc(count * sizeof(unsigned int))
+            if buf == NULL:
+                raise MemoryError("Cannot allocate buffer")
+            self._read_32bits_unaligned(buf, count, count_bytes, rollback, left_offset)
+            result = (<unsigned char *> buf)[left_offset:left_offset+count]
         finally:
             if buf != NULL:
                 free(buf)
