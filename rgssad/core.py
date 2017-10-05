@@ -4,11 +4,35 @@ import ntpath
 import io
 import struct
 import logging
+import importlib
 
-try:
-    from . import _crypto as crypto
-except ImportError:
-    from . import crypto
+#try:
+#    from . import _crypto as crypto
+#except ImportError:
+#    from . import crypto
+
+crypto = None
+
+def set_crypto_impl(impl='c'):
+    global crypto
+    assert impl in ('c', 'py'), 'Unknown crypto implementation {}'.format(impl)
+    logger = logging.getLogger('rgssad.core')
+    if impl == 'c':
+        try:
+            logger.debug('set_crypto_impl(): Use native implementation')
+            crypto = importlib.import_module('._crypto', package=__package__)
+        except ImportError:
+            logger.warning(
+                'set_crypto_impl(): native implementation not available, '
+                'fallback to python implementation (performance may be '
+                'impacted)'
+            )
+            crypto = importlib.import_module('.crypto', package=__package__)
+    elif impl == 'py':
+        logger.debug('set_crypto_impl(): Use python implementation')
+        crypto = importlib.import_module('.crypto', package=__package__)
+
+set_crypto_impl(impl='c')
 
 
 class Archive(object):

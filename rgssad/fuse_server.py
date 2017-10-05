@@ -241,11 +241,15 @@ def parse_args():
     p.add_argument('-F', '--fmask', type=_xmask,
                    default=0o133,
                    help='Override fmask')
+    p.add_argument('-c', '--crypto-impl', type=str,
+                   default='c',
+                   help='Implementation of the crypto module (c, py)')
     return p, p.parse_args()
 
 def main():
     p, args = parse_args()
     logging.basicConfig(level=(logging.INFO, logging.DEBUG)[int(args.debug)])
+    core.set_crypto_impl(args.crypto_impl)
     svr = RgssadFuse(
         args.rgssad,
         uid=args.uid,
