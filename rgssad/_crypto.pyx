@@ -73,14 +73,14 @@ cdef class XORer:
         self._push_offset()
 
     cdef inline void _pull_offset(self):
-        self.logger.debug("pull: %d -> %d", ftell(self._io_handle), self.io_obj.tell())
+        self.logger.debug("_pull_offset(): %d -> %d", ftell(self._io_handle), self.io_obj.tell())
         fseek(self._io_handle, self.io_obj.tell(), SEEK_SET)
-        self.logger.debug("py: %d, c: %d", ftell(self._io_handle), self.io_obj.tell())
+        #self.logger.debug("_pull_offset(): py: %d, c: %d", ftell(self._io_handle), self.io_obj.tell())
 
     cdef inline void _push_offset(self):
-        self.logger.debug("push: %d -> %d", self.io_obj.tell(), ftell(self._io_handle))
+        self.logger.debug("_push_offset(): %d -> %d", self.io_obj.tell(), ftell(self._io_handle))
         self.io_obj.seek(ftell(self._io_handle))
-        self.logger.debug("py: %d, c: %d", ftell(self._io_handle), self.io_obj.tell())
+        #self.logger.debug("_pull_offset(): py: %d, c: %d", ftell(self._io_handle), self.io_obj.tell())
 
     cdef void _read_8bits(self, unsigned char *buf, unsigned int count):
         cdef unsigned int i
@@ -108,6 +108,7 @@ cdef class XORer:
                                      unsigned int left_offset):
         cdef unsigned int i
         self._pull_offset()
+        self.logger.debug("read %d bytes (%d int blocks)", count_bytes, count)
         fread(<void *> &((<unsigned char *> buf)[left_offset]), sizeof(unsigned char), count_bytes, self._io_handle)
         for i in range(count):
             buf[i] ^= self.magickey_obj.get_next()
@@ -187,7 +188,7 @@ cdef class XORer:
                 raise MemoryError("Cannot allocate buffer")
             memset(<void *> buf, 0, count * sizeof(unsigned int))
             self._read_32bits_unaligned(buf, count, count_bytes, rollback, left_offset)
-            result = (<unsigned char *> buf)[left_offset:left_offset+count]
+            result = (<unsigned char *> buf)[left_offset:left_offset+count_bytes]
         finally:
             if buf != NULL:
                 free(buf)
