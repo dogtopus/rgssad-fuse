@@ -36,11 +36,11 @@ cdef class MagicKeyFactory:
         for i in range(count):
             self._transform_backwards()
 
-    cdef _transform(self):
+    cdef inline void _transform(self):
         self.key *= 7
         self.key += 3
 
-    cdef _transform_backwards(self):
+    cdef inline void _transform_backwards(self):
         self.key -= 3
         # 0xb6db6db7 = inv(7) (mod 0x100000000)
         self.key *= <unsigned int> 0xb6db6db7
