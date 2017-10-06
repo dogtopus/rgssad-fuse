@@ -15,22 +15,26 @@ crypto = None
 
 def set_crypto_impl(impl='c'):
     global crypto
+    # Seems that __package__ variable is not always set. Use workaround
+    # suggessted on https://stackoverflow.com/questions/4437394/package-is-none
+    # -when-importing-a-python-module instead
+    package = __name__.rpartition('.')[0]
     assert impl in ('c', 'py'), 'Unknown crypto implementation {}'.format(impl)
     logger = logging.getLogger('rgssad.core')
     if impl == 'c':
         try:
             logger.debug('set_crypto_impl(): Use native implementation')
-            crypto = importlib.import_module('._crypto', package=__package__)
+            crypto = importlib.import_module('._crypto', package=package)
         except ImportError:
             logger.warning(
                 'set_crypto_impl(): native implementation not available, '
                 'fallback to python implementation (performance may be '
                 'impacted)'
             )
-            crypto = importlib.import_module('.crypto', package=__package__)
+            crypto = importlib.import_module('.crypto', package=package)
     elif impl == 'py':
         logger.debug('set_crypto_impl(): Use python implementation')
-        crypto = importlib.import_module('.crypto', package=__package__)
+        crypto = importlib.import_module('.crypto', package=package)
 
 set_crypto_impl(impl='c')
 
