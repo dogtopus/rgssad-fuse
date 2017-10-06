@@ -82,8 +82,8 @@ cdef class XORer:
         self.io_obj.seek(ftell(self._io_handle))
         #self.logger.debug("_pull_offset(): py: %d, c: %d", ftell(self._io_handle), self.io_obj.tell())
 
-    cdef void _read_8bits(self, unsigned char *buf, unsigned int count):
-        cdef unsigned int i
+    cdef void _read_8bits(self, unsigned char *buf, size_t count):
+        cdef size_t i
         self._pull_offset()
         self.logger.debug("read %d bytes", count)
         fread(<void *>buf, sizeof(unsigned char), count, self._io_handle)
@@ -91,8 +91,8 @@ cdef class XORer:
             buf[i] ^= (self.magickey_obj.get_next() & 0xff)
         self._push_offset()
 
-    cdef void _read_32bits(self, unsigned int *buf, unsigned int count):
-        cdef unsigned int i
+    cdef void _read_32bits(self, unsigned int *buf, size_t count):
+        cdef size_t i
         self._pull_offset()
         self.logger.debug("read %d ints", count)
         fread(<void *>buf, sizeof(unsigned int), count, self._io_handle)
@@ -117,8 +117,8 @@ cdef class XORer:
             self.magickey_obj.one_step_rollback()
         self._push_offset()
 
-    def read_8bits(self, unsigned int count):
-        cdef unsigned int i
+    def read_8bits(self, size_t count):
+        cdef size_t i
         cdef object result
         cdef unsigned char *buf
 
@@ -134,7 +134,7 @@ cdef class XORer:
 
         return result
 
-    def read_data_8bit(self, unsigned int count):
+    def read_data_8bit(self, size_t count):
         cdef bytes result
         cdef unsigned char *buf
 
@@ -151,8 +151,8 @@ cdef class XORer:
 
         return result
 
-    def read_32bits(self, unsigned int count):
-        cdef unsigned int i
+    def read_32bits(self, size_t count):
+        cdef size_t i
         cdef object result
         cdef unsigned int *buf
 
@@ -169,10 +169,11 @@ cdef class XORer:
 
         return result
 
-    def read_32bits_unaligned(self, unsigned int count_bytes, unsigned int left_offset=0):
+    def read_32bits_unaligned(self, size_t count_bytes, unsigned int left_offset=0):
         cdef unsigned int *buf
-        cdef unsigned int count
+        cdef size_t count
         cdef unsigned char rollback
+        cdef bytes result
 
         count = count_bytes + left_offset
         rollback = <char> count % 4
