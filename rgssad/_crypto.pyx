@@ -1,11 +1,9 @@
 # TODO implement a native version of XORer
 import logging
-from crypto import StaticMagicKeyFactory
 from libc.stdio cimport fdopen, fread, fseek, ftell, SEEK_CUR, SEEK_SET, FILE, printf
 from libc.stdlib cimport malloc, free
 from libc.string cimport memset
 
-#from crypto import XORer
 
 cdef class MagicKeyFactory:
     cdef unsigned int iv
@@ -53,6 +51,26 @@ cdef class MagicKeyFactory:
     cpdef reset(self):
         self.logger.debug('key reset')
         self.key = self.iv
+
+
+cdef class StaticMagicKeyFactory(MagicKeyFactory):
+    def __init__(self, unsigned int iv=0xdeadcafe):
+        self.iv = iv
+
+    cpdef unsigned int get_next(self):
+        return self.iv
+
+    cpdef skip(self, unsigned int count):
+        pass
+
+    cpdef rewind(self, unsigned int count):
+        pass
+
+    cpdef one_step_rollback(self):
+        pass
+
+    cpdef reset(self):
+        pass
 
 
 cdef class XORer:
@@ -162,7 +180,7 @@ cdef class XORer:
                 raise MemoryError("Cannot allocate buffer")
             memset(<void *> buf, 0, count * sizeof(unsigned int))
             self._read_32bits(buf, count)
-            result = tuple(buf[i] for i in range(count * sizeof(unsigned int)))
+            result = tuple(buf[i] for i in range(count))
         finally:
             if buf != NULL:
                 free(buf)
