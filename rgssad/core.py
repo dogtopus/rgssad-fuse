@@ -5,6 +5,7 @@ import io
 import struct
 import logging
 import importlib
+import errno
 
 #try:
 #    from . import _crypto as crypto
@@ -224,7 +225,8 @@ class File(io.FileIO):
         if (whence == io.SEEK_SET and offset < 0) or \
                 (whence == io.SEEK_CUR and (offset + self.tell()) < 0) or \
                 (whence == io.SEEK_END and (offset + self.vfile_length) < 0):
-            raise ValueError('Negative seek position {0}'.format(offset))
+            self.logger.error('Negative seek position %d', offset)
+            raise OSError(errno.EINVAL)
 
         # offsets (in 32-bit blocks)
         block_count = offset // 4
