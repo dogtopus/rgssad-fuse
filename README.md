@@ -17,7 +17,7 @@ having one would be cool.
 
 - *NIX operating system that supports FUSE (Windows support is probably possible
   with [dokan-fuse][2] but it is untested)
-- Python 3 (needs to be a relatively recent version that supports `yield form`
+- Python 3 (needs to be a relatively recent version that supports `yield from`
   syntax)
 - llfuse (not sure about the version, so please use the latest)
 - Cython (for building native "crypto" extension for (significantly) faster file
