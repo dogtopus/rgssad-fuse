@@ -201,7 +201,7 @@ class File(io.FileIO):
         Reads XORed data into bytes (32-bit unaligned block)
         '''
         if count <= 0:
-            return ''
+            return b''
 
         truncate_bytes = self.tell() % 4
         data = self.xorer.read_32bits_unaligned(count, truncate_bytes)

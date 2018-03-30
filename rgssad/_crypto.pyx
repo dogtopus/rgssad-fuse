@@ -3,35 +3,36 @@ import logging
 from libc.stdio cimport fdopen, fread, fseek, ftell, SEEK_CUR, SEEK_SET, FILE, printf
 from libc.stdlib cimport malloc, free
 from libc.string cimport memset
+from libc.stdint cimport uint32_t
 
 
 cdef class MagicKeyFactory:
-    cdef unsigned int iv
-    cdef unsigned int key
+    cdef uint32_t iv
+    cdef uint32_t key
     cpdef object logger
 
-    def __init__(self, unsigned int iv=0xdeadcafe):
+    def __init__(self, uint32_t iv=0xdeadcafe):
         self.logger = logging.getLogger('rgssad.MagicKeyFactory')
         self.iv = iv
         self.key = 0
         self.reset()
 
-    cpdef unsigned int get_key(self):
+    cpdef uint32_t get_key(self):
         return self.key
 
-    cpdef unsigned int get_next(self):
-        cdef unsigned int key = self.key
+    cpdef uint32_t get_next(self):
+        cdef uint32_t key = self.key
         self._transform()
         return key
 
-    cpdef skip(self, unsigned int count):
-        cdef unsigned int i = 0
+    cpdef skip(self, unsigned long long count):
+        cdef unsigned long long i = 0
         self.logger.debug('skip %d block(s)', count)
         for i in range(count):
             self._transform()
 
-    cpdef rewind(self, unsigned int count):
-        cdef unsigned int i = 0
+    cpdef rewind(self, unsigned long long count):
+        cdef unsigned long long i = 0
         self.logger.debug('rewind %d block(s)', count)
         for i in range(count):
             self._transform_backwards()
@@ -43,7 +44,7 @@ cdef class MagicKeyFactory:
     cdef inline void _transform_backwards(self):
         self.key -= 3
         # 0xb6db6db7 = inv(7) (mod 0x100000000)
-        self.key *= <unsigned int> 0xb6db6db7
+        self.key *= 0xb6db6db7UL
 
     cpdef one_step_rollback(self):
         self._transform_backwards()
@@ -54,16 +55,16 @@ cdef class MagicKeyFactory:
 
 
 cdef class StaticMagicKeyFactory(MagicKeyFactory):
-    def __init__(self, unsigned int iv=0xdeadcafe):
+    def __init__(self, uint32_t iv=0xdeadcafe):
         self.iv = iv
 
-    cpdef unsigned int get_next(self):
+    cpdef uint32_t get_next(self):
         return self.iv
 
-    cpdef skip(self, unsigned int count):
+    cpdef skip(self, unsigned long long count):
         pass
 
-    cpdef rewind(self, unsigned int count):
+    cpdef rewind(self, unsigned long long count):
         pass
 
     cpdef one_step_rollback(self):
@@ -109,22 +110,22 @@ cdef class XORer:
             buf[i] ^= (self.magickey_obj.get_next() & 0xff)
         self._push_offset()
 
-    cdef void _read_32bits(self, unsigned int *buf, size_t count):
+    cdef void _read_32bits(self, uint32_t *buf, size_t count):
         cdef size_t i
         self._pull_offset()
         self.logger.debug("read %d ints", count)
-        fread(<void *>buf, sizeof(unsigned int), count, self._io_handle)
+        fread(<void *>buf, sizeof(uint32_t), count, self._io_handle)
         for i in range(count):
             buf[i] ^= self.magickey_obj.get_next()
         self._push_offset()
 
     cdef void _read_32bits_unaligned(self,
-                                     unsigned int *buf,
-                                     unsigned int count,
-                                     unsigned int count_bytes,
+                                     uint32_t *buf,
+                                     size_t count,
+                                     size_t count_bytes,
                                      char rollback,
                                      unsigned int left_offset):
-        cdef unsigned int i
+        cdef size_t i
         self._pull_offset()
         self.logger.debug("read %d bytes (%d int blocks)", count_bytes, count)
         fread(<void *> &((<unsigned char *> buf)[left_offset]), sizeof(unsigned char), count_bytes, self._io_handle)
@@ -137,7 +138,7 @@ cdef class XORer:
 
     def read_8bits(self, size_t count):
         cdef size_t i
-        cdef object result
+        cdef tuple result
         cdef unsigned char *buf
 
         try:
@@ -171,14 +172,14 @@ cdef class XORer:
 
     def read_32bits(self, size_t count):
         cdef size_t i
-        cdef object result
-        cdef unsigned int *buf
+        cdef tuple result
+        cdef uint32_t *buf
 
         try:
-            buf = <unsigned int *> malloc(count * sizeof(unsigned int))
+            buf = <uint32_t *> malloc(count * sizeof(uint32_t))
             if buf == NULL:
                 raise MemoryError("Cannot allocate buffer")
-            memset(<void *> buf, 0, count * sizeof(unsigned int))
+            memset(<void *> buf, 0, count * sizeof(uint32_t))
             self._read_32bits(buf, count)
             result = tuple(buf[i] for i in range(count))
         finally:
@@ -188,7 +189,7 @@ cdef class XORer:
         return result
 
     def read_32bits_unaligned(self, size_t count_bytes, unsigned int left_offset=0):
-        cdef unsigned int *buf
+        cdef uint32_t *buf
         cdef size_t count
         cdef unsigned char rollback
         cdef bytes result
@@ -202,10 +203,10 @@ cdef class XORer:
             count /= 4
 
         try:
-            buf = <unsigned int *> malloc(count * sizeof(unsigned int))
+            buf = <uint32_t *> malloc(count * sizeof(uint32_t))
             if buf == NULL:
                 raise MemoryError("Cannot allocate buffer")
-            memset(<void *> buf, 0, count * sizeof(unsigned int))
+            memset(<void *> buf, 0, count * sizeof(uint32_t))
             self._read_32bits_unaligned(buf, count, count_bytes, rollback, left_offset)
             result = (<unsigned char *> buf)[left_offset:left_offset+count_bytes]
         finally:
