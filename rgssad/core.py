@@ -16,6 +16,7 @@
 
 import os
 import ntpath
+import posixpath
 import io
 import struct
 import logging
@@ -28,6 +29,8 @@ import errno
 #    from . import crypto
 
 crypto = None
+
+ROOT_INODE = 1
 
 def set_crypto_impl(impl='c'):
     global crypto
@@ -59,13 +62,14 @@ class Archive(object):
     def __init__(self, arc_filename):
         self.logger = logging.getLogger('rgssad.Archive')
         self.filename = arc_filename
-        self.inodes = [{
+        self.inodes = (ROOT_INODE * [None]) + [{
             'type': 'd',
             'children': [
-                {'id': 0, 'name': '.'},
-                {'id': 0, 'name': '..'}
+                {'id': ROOT_INODE, 'name': '.'},
+                {'id': ROOT_INODE, 'name': '..'}
             ]
         }]
+        # Special inode initialization goes here (if needed)
         self._build_directory_tree()
 
     def _parse_metadata(self):
@@ -141,7 +145,7 @@ class Archive(object):
             return inode
 
         def _nt_mkdir_p(path):
-            cur_inode = 0
+            cur_inode = ROOT_INODE
             for p in ntpath.normpath(path).split(ntpath.sep):
                 next_inode = self.lookup(cur_inode, p)
                 if next_inode is not None:
@@ -174,6 +178,19 @@ class Archive(object):
                 return direntry['id']
         return None
 
+    def _lookup_r(self, dirs, from_inode=ROOT_INODE):
+        if len(dirs) == 1:
+            return self.lookup(from_inode, dirs[0])
+
+        next_inode = self.lookup(from_inode, dirs[0])
+        if next_inode is None:
+            return None
+        return self._lookup_r(dirs[1:], from_inode=next_inode)
+
+    def lookup_r(self, path, from_inode=ROOT_INODE):
+        dirs = posixpath.normpath(path).split(posixpath.sep)
+        return self._lookup_r(dirs, from_inode)
+
     def exists(self, inode):
         try:
             return self.inodes[inode] is not None
@@ -191,14 +208,23 @@ class Archive(object):
     def read_inode(self, inode):
         return self.inodes[inode]
 
-    def open(self, inode):
-        '''Open a file in the archive and return a file-like object'''
+    def iopen(self, inode):
+        '''Open a file in the archive by inode and return a file-like object'''
         assert self.isfile(inode), 'inode is not a file'
         entry = self.inodes[inode]
         return File(self.filename,
                     entry['offset'],
                     entry['size'],
                     entry['magickey'])
+
+    def open(self, path):
+        inode = self.lookup_r(path)
+        if inode is None:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+        elif self.isdir(inode):
+            raise IsADirectoryError(errno.EISDIR, os.strerror(errno.EISDIR), path)
+        else:
+            return self.iopen(inode)
 
 
 class File(io.FileIO):

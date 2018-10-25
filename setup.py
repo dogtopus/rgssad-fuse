@@ -27,7 +27,7 @@ except ImportError:
 
 options = dict(
     name='rgssad',
-    version='0.2.1',
+    version='0.3.0',
     description='RGSSAD library',
     author='dogtopus',
     packages=['rgssad'],

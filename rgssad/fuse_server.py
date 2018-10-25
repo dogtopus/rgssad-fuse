@@ -190,7 +190,7 @@ class RgssadFuse(llfuse.Operations):
         if flags & os.O_RDWR or flags & os.O_WRONLY:
             raise llfuse.FUSEError(errno.EROFS)
 
-        fh = self._fh.alloc({'type': 'f', 'ref': self.archive.open(_if2a(inode))})
+        fh = self._fh.alloc({'type': 'f', 'ref': self.archive.iopen(_if2a(inode))})
         return fh
 
     def read(self, fh, off, size):
@@ -219,10 +219,10 @@ class RgssadFuse(llfuse.Operations):
 
 
 def _if2a(inode):
-    return inode - llfuse.ROOT_INODE
+    return inode - (llfuse.ROOT_INODE - core.ROOT_INODE)
 
 def _ia2f(inode):
-    return llfuse.ROOT_INODE + inode
+    return (llfuse.ROOT_INODE - core.ROOT_INODE) + inode
 
 def parse_args():
     _xmask = lambda n: None if n is None else (int(n, 8) & 0o777)
