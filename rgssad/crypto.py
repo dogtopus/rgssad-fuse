@@ -87,7 +87,6 @@ class MagicKeyFactory(object):
         if not self.can_rewind:
             raise TypeError('This factory does not support rewind')
         self.key -= self._lcg_table[0][1]
-        # 0xb6db6db7 = inv(7) (mod 0x100000000)
         self.key *= self._lcg_table[0][2]
         self.key &= 0xffffffff
 

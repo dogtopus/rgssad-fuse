@@ -18,18 +18,36 @@ from libc.stdio cimport fdopen, fread, fseek, ftell, SEEK_CUR, SEEK_SET, FILE, p
 from libc.stdlib cimport malloc, free
 from libc.string cimport memset
 from libc.stdint cimport uint32_t
+from .crypto import xgcd, lcg_gen, LCG_TABLE
 
 
 cdef class MagicKeyFactory:
     cdef uint32_t iv
     cdef uint32_t key
     cpdef object logger
+    cdef uint32_t _lcg_table[30][3]
+    cpdef bool can_rewind
 
-    def __init__(self, uint32_t iv=0xdeadcafe):
+    def __init__(self, uint32_t iv=0xdeadcafe, tuple lcg_table=LCG_TABLE):
+        self.can_rewind = True
+        self._init_clcg_table(lcg_table)
         self.logger = logging.getLogger('rgssad.MagicKeyFactory')
         self.iv = iv
         self.key = 0
         self.reset()
+
+    cdef inline void _init_clcg_table(self, tuple pylcg):
+        # only copy 30x3 numbers
+        for i in range(30):
+            for j in range(3):
+                if not self.can_rewind:
+                    continue
+                if j == 2 and pylcg[i][j] is None:
+                    self.can_rewind = False
+                    self._lcg_table[i][j] = 0
+                else:
+                    # cython should handle other sanity issues
+                    self._lcg_table[i][j] = (pylcg[i][j] & 0xffffffffUL)
 
     cpdef uint32_t get_key(self):
         return self.key
@@ -52,13 +70,12 @@ cdef class MagicKeyFactory:
             self._transform_backwards()
 
     cdef inline void _transform(self):
-        self.key *= 7
-        self.key += 3
+        self.key *= self._lgc_table[0][0]
+        self.key += self._lgc_table[0][1]
 
     cdef inline void _transform_backwards(self):
-        self.key -= 3
-        # 0xb6db6db7 = inv(7) (mod 0x100000000)
-        self.key *= 0xb6db6db7UL
+        self.key -= self._lgc_table[0][1]
+        self.key *= self._lgc_table[0][2]
 
     cpdef one_step_rollback(self):
         self._transform_backwards()
