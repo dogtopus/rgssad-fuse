@@ -92,7 +92,7 @@ class RgssadFuse(llfuse.Operations):
 
         self._fh = FileHandleTable()
 
-        self.archive = core.Archive(arc_filename)
+        self.archive = core.Archive(arc_filename, llfuse.ROOT_INODE)
         if uid is not None:
             self.uid = uid
         else:
@@ -129,7 +129,7 @@ class RgssadFuse(llfuse.Operations):
         entry = llfuse.EntryAttributes()
 
         try:
-            arc_entry = self.archive.read_inode(_if2a(inode))
+            arc_entry = self.archive.read_inode(inode)
         except IndexError:
             raise llfuse.FUSEError(errno.ENOENT)
         arc_entry_type = arc_entry['type']
@@ -156,17 +156,17 @@ class RgssadFuse(llfuse.Operations):
 
     def lookup(self, parent_inode, name, ctx=None):
         self.logger.debug('lookup(): parent_inode=%d, name=%s', parent_inode, name)
-        arc_inode = self.archive.lookup(_if2a(parent_inode), name.decode('utf-8'))
+        arc_inode = self.archive.lookup(parent_inode, name.decode('utf-8'))
         if arc_inode is None:
             raise llfuse.FUSEError(errno.ENOENT)
-        return self.getattr(_ia2f(arc_inode))
+        return self.getattr(arc_inode)
 
     def opendir(self, inode, ctx):
         self.logger.debug('opendir(): inode=%d', inode)
-        if not self.archive.exists(_if2a(inode)) or \
-                not self.archive.isdir(_if2a(inode)):
+        if not self.archive.exists(inode) or \
+                not self.archive.isdir(inode):
             raise llfuse.FUSEError(errno.ENOENT)
-        fh = self._fh.alloc({'type': 'd', 'ref': _if2a(inode)})
+        fh = self._fh.alloc({'type': 'd', 'ref': inode})
 
         return fh
 
@@ -177,12 +177,12 @@ class RgssadFuse(llfuse.Operations):
             'readdir() with invalid fh'
 
         for ctr, entry in enumerate(self.archive.readdir(fhobj['ref'], off or None)):
-            yield (entry['name'].encode('utf-8'), self.getattr(_ia2f(entry['id'])), ctr + off + 1)
+            yield (entry['name'].encode('utf-8'), self.getattr(entry['id']), ctr + off + 1)
 
     def open(self, inode, flags, ctx):
         self.logger.debug('open(): inode=%d, flags=%d', inode, flags)
-        if self.archive.exists(_if2a(inode)):
-            if self.archive.isdir(_if2a(inode)):
+        if self.archive.exists(inode):
+            if self.archive.isdir(inode):
                 raise llfuse.FUSEError(errno.EISDIR)
         else:
             raise llfuse.FUSEError(errno.ENOENT)
@@ -190,7 +190,7 @@ class RgssadFuse(llfuse.Operations):
         if flags & os.O_RDWR or flags & os.O_WRONLY:
             raise llfuse.FUSEError(errno.EROFS)
 
-        fh = self._fh.alloc({'type': 'f', 'ref': self.archive.iopen(_if2a(inode))})
+        fh = self._fh.alloc({'type': 'f', 'ref': self.archive.iopen(inode)})
         return fh
 
     def read(self, fh, off, size):
@@ -217,12 +217,6 @@ class RgssadFuse(llfuse.Operations):
             'releasedir() with invalid fh'
         self._fh.free(fh)
 
-
-def _if2a(inode):
-    return inode - (llfuse.ROOT_INODE - core.ROOT_INODE)
-
-def _ia2f(inode):
-    return (llfuse.ROOT_INODE - core.ROOT_INODE) + inode
 
 def parse_args():
     _xmask = lambda n: None if n is None else (int(n, 8) & 0o777)

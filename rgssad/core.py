@@ -59,14 +59,15 @@ set_crypto_impl(impl='c')
 
 
 class Archive(object):
-    def __init__(self, arc_filename):
+    def __init__(self, arc_filename, root_inode=ROOT_INODE):
         self.logger = logging.getLogger('rgssad.Archive')
         self.filename = arc_filename
-        self.inodes = (ROOT_INODE * [None]) + [{
+        self._root_inode = root_inode
+        self.inodes = (self._root_inode * [None]) + [{
             'type': 'd',
             'children': [
-                {'id': ROOT_INODE, 'name': '.'},
-                {'id': ROOT_INODE, 'name': '..'}
+                {'id': self._root_inode, 'name': '.'},
+                {'id': self._root_inode, 'name': '..'}
             ]
         }]
         # Special inode initialization goes here (if needed)
@@ -145,7 +146,7 @@ class Archive(object):
             return inode
 
         def _nt_mkdir_p(path):
-            cur_inode = ROOT_INODE
+            cur_inode = self._root_inode
             for p in ntpath.normpath(path).split(ntpath.sep):
                 next_inode = self.lookup(cur_inode, p)
                 if next_inode is not None:
@@ -178,7 +179,9 @@ class Archive(object):
                 return direntry['id']
         return None
 
-    def _lookup_r(self, dirs, from_inode=ROOT_INODE):
+    def _lookup_r(self, dirs, from_inode=None):
+        if from_inode is None:
+            from_inode = self._root_inode
         if len(dirs) == 1:
             return self.lookup(from_inode, dirs[0])
 
@@ -187,7 +190,9 @@ class Archive(object):
             return None
         return self._lookup_r(dirs[1:], from_inode=next_inode)
 
-    def lookup_r(self, path, from_inode=ROOT_INODE):
+    def lookup_r(self, path, from_inode=None):
+        if from_inode is None:
+            from_inode = self._root_inode
         dirs = posixpath.normpath(path).split(posixpath.sep)
         return self._lookup_r(dirs, from_inode)
 
