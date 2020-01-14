@@ -1,3 +1,4 @@
+# cython: language_level=3
 # This file is part of rgssad-fuse.
 
 # rgssad-fuse is free software: you can redistribute it and/or modify
@@ -24,9 +25,10 @@ from .crypto import xgcd, lcg_gen, LCG_TABLE
 cdef class MagicKeyFactory:
     cdef uint32_t iv
     cdef uint32_t key
+    cdef uint32_t _key_prev
     cpdef object logger
     cdef uint32_t _lcg_table[30][3]
-    cpdef bool can_rewind
+    cdef readonly bint can_rewind
 
     def __init__(self, uint32_t iv=0xdeadcafe, tuple lcg_table=LCG_TABLE):
         self.can_rewind = True
@@ -34,6 +36,7 @@ cdef class MagicKeyFactory:
         self.logger = logging.getLogger('rgssad.MagicKeyFactory')
         self.iv = iv
         self.key = 0
+        self._key_prev = 0
         self.reset()
 
     cdef inline void _init_clcg_table(self, tuple pylcg):
@@ -54,31 +57,76 @@ cdef class MagicKeyFactory:
 
     cpdef uint32_t get_next(self):
         cdef uint32_t key = self.key
+        if not self.can_rewind:
+            self._key_prev = key
         self._transform()
         return key
 
-    cpdef skip(self, unsigned long long count):
-        cdef unsigned long long i = 0
+    cpdef skip(self, size_t count):
+        if count < 0:
+            raise ValueError('Block count must be zero or positive')
+        elif count >= (<size_t>1<<31):
+            raise ValueError('Try to seek beyond 32-bit range')
         self.logger.debug('skip %d block(s)', count)
-        for i in range(count):
-            self._transform()
+        self._transformn(count)
 
-    cpdef rewind(self, unsigned long long count):
-        cdef unsigned long long i = 0
+    cpdef rewind(self, size_t count):
+        if count < 0:
+            raise ValueError('Block count must be zero or positive')
+        elif count >= (<size_t>1<<31):
+            raise ValueError('Try to seek beyond 32-bit range')
         self.logger.debug('rewind %d block(s)', count)
-        for i in range(count):
-            self._transform_backwards()
+        self._transformn_backwards(count)
 
     cdef inline void _transform(self):
-        self.key *= self._lgc_table[0][0]
-        self.key += self._lgc_table[0][1]
+        self.key *= self._lcg_table[0][0]
+        self.key += self._lcg_table[0][1]
 
     cdef inline void _transform_backwards(self):
-        self.key -= self._lgc_table[0][1]
-        self.key *= self._lgc_table[0][2]
+        if not self.can_rewind:
+            raise TypeError('This factory does not support rewind')
+        self.key -= self._lcg_table[0][1]
+        self.key *= self._lcg_table[0][2]
+
+    cdef inline void _transformn(self, size_t n):
+        cdef int bitpos
+        cdef uint32_t m, a
+        if n < 0:
+            raise ValueError('Block count must be zero or positive')
+        elif n >= (<size_t>1<<31):
+            raise ValueError('Try to seek beyond 32-bit range')
+        for bitpos in range(30):
+            if n & 1:
+                m = self._lcg_table[bitpos][0]
+                a = self._lcg_table[bitpos][1]
+                self.key *= m
+                self.key += a
+            if bitpos == 0:
+                break
+
+    cdef inline void _transformn_backwards(self, size_t n):
+        cdef int bitpos
+        cdef uint32_t m, a
+        if n < 0:
+            raise ValueError('Block count must be zero or positive')
+        elif n >= (<size_t>1<<31):
+            raise ValueError('Try to seek beyond 32-bit range')
+        elif not self.can_rewind:
+            raise TypeError('This factory does not support rewind')
+        for bitpos in range(30):
+            if n & 1:
+                m = self._lcg_table[bitpos][1]
+                a = self._lcg_table[bitpos][2]
+                self.key -= m
+                self.key *= a
+            if bitpos == 0:
+                break
 
     cpdef one_step_rollback(self):
-        self._transform_backwards()
+        if not self.can_rewind:
+            self.key = self._key_prev
+        else:
+            self._transform_backwards()
 
     cpdef reset(self):
         self.logger.debug('key reset')
@@ -87,15 +135,16 @@ cdef class MagicKeyFactory:
 
 cdef class StaticMagicKeyFactory(MagicKeyFactory):
     def __init__(self, uint32_t iv=0xdeadcafe):
+        self.can_rewind = False
         self.iv = iv
 
     cpdef uint32_t get_next(self):
         return self.iv
 
-    cpdef skip(self, unsigned long long count):
+    cpdef skip(self, size_t count):
         pass
 
-    cpdef rewind(self, unsigned long long count):
+    cpdef rewind(self, size_t count):
         pass
 
     cpdef one_step_rollback(self):
@@ -224,6 +273,8 @@ cdef class XORer:
         cdef size_t count
         cdef unsigned char rollback
         cdef bytes result
+
+        assert left_offset in range(0, 4)
 
         count = count_bytes + left_offset
         rollback = <char> count % 4

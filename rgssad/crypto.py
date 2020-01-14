@@ -31,7 +31,7 @@ def xgcd(a, m):
 
 # calculates equivalent LCG constants after 2^n iterations
 # WARNING: costly, do not invoke too frequently
-def lcg_gen(mul, add, bits):
+def lcg_gen(mul, add, bits=30):
     gcd, im = xgcd(mul, 1 << 32)
     if gcd != 1:
         im = None
@@ -50,7 +50,7 @@ def lcg_gen(mul, add, bits):
 
 # Why 30? Remember that RGSSAD uses 32-bit offset and each block of data is 4
 # bytes.
-LCG_TABLE = tuple(lcg_gen(7, 3, 30))
+LCG_TABLE = tuple(lcg_gen(7, 3))
 
 class MagicKeyFactory(object):
     def __init__(self, iv=0xdeadcafe, lcg_table=LCG_TABLE):
@@ -58,8 +58,13 @@ class MagicKeyFactory(object):
         self.logger = logging.getLogger('rgssad.MagicKeyFactory')
         self.key = 0
         self.iv = iv
-        self.can_rewind = self._lcg_table[0][2] is not None
+        self._can_rewind = self._lcg_table[0][2] is not None
+        self._key_prev = 0
         self.reset()
+
+    @property
+    def can_rewind(self):
+        return self._can_rewind
 
     def get_key(self):
         return self.key
@@ -67,6 +72,8 @@ class MagicKeyFactory(object):
     def get_next(self):
         key = self.key
         #self.logger.debug('key: %d', key)
+        if not self.can_rewind:
+            self._key_prev = key
         self._transform()
         return key
 
@@ -116,7 +123,10 @@ class MagicKeyFactory(object):
             bitpos += 1
 
     def one_step_rollback(self):
-        self._transform_backwards()
+        if self.can_rewind:
+            self._transform_backwards()
+        else:
+            self.key = self._key_prev
 
     def reset(self):
         self.logger.debug('key reset')
