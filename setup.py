@@ -15,15 +15,23 @@
 # along with rgssad-fuse.  If not, see <http://www.gnu.org/licenses/>.
 
 from setuptools import setup
+import platform
 
 NATIVE_CRYPTO = False
 
-try:
-    from Cython.Build import cythonize
-    NATIVE_CRYPTO = True
-except ImportError:
-    print('WARNING: Cython not installed, native crypto module could not be '
-          'built.')
+if platform.python_implementation() == 'CPython':
+    try:
+        from Cython.Build import cythonize
+        NATIVE_CRYPTO = True
+    except ImportError:
+        print('WARNING: Cython not installed, native crypto module could not be '
+              'built.')
+elif platform.python_implementation() == 'PyPy':
+    # Skip native crypto on PyPy since we don't need it.
+    NATIVE_CRYPTO = False
+else:
+    print('WARNING: Unknown Python runtime. Disabling native crypto module.')
+    NATIVE_CRYPTO = False
 
 options = dict(
     name='rgssad',

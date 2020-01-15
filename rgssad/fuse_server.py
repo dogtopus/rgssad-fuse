@@ -250,7 +250,7 @@ def parse_args():
                    default=0o133,
                    help='Override fmask')
     p.add_argument('-c', '--crypto-impl', type=str,
-                   default='c',
+                   default=core.DEFAULT_CRYPTO_IMPL,
                    help='Implementation of the crypto module (c, py)')
     return p, p.parse_args()
 

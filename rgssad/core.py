@@ -22,6 +22,7 @@ import struct
 import logging
 import importlib
 import errno
+import platform
 
 #try:
 #    from . import _crypto as crypto
@@ -31,8 +32,9 @@ import errno
 crypto = None
 
 ROOT_INODE = 1
+DEFAULT_CRYPTO_IMPL = 'c'
 
-def set_crypto_impl(impl='c'):
+def set_crypto_impl(impl):
     global crypto
     # Seems that __package__ variable is not always set. Use workaround
     # suggessted on https://stackoverflow.com/questions/4437394/package-is-none
@@ -55,7 +57,12 @@ def set_crypto_impl(impl='c'):
         logger.debug('set_crypto_impl(): Use python implementation')
         crypto = importlib.import_module('.crypto', package=package)
 
-set_crypto_impl(impl='c')
+
+if platform.python_implementation() == 'CPython':
+    set_crypto_impl(impl='c')
+else:
+    set_crypto_impl(impl='py')
+    DEFAULT_CRYPTO_IMPL = 'py'
 
 
 class Archive(object):
