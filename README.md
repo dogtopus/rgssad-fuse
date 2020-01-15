@@ -15,8 +15,7 @@ having one would be cool.
 
 ## Prerequisites
 
-- *NIX operating system that supports FUSE (Windows support is probably possible
-  with [dokan-fuse][2] but it is untested)
+- *NIX operating system that supports FUSE.
 - Python 3 (needs to be a relatively recent version that supports `yield from`
   syntax)
 - llfuse (not sure about the version, so please use the latest)
@@ -49,4 +48,3 @@ Refer to `pydoc rgssad.core` for more information. But please note that the
 current API is still pretty user unfriendly and needs work.
 
 [1]: https://github.com/Ancurio/mkxp
-[2]: https://dokan-dev.github.io/
