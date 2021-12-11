@@ -94,9 +94,9 @@ class Archive(object):
                 yield fn.decode('utf-8'), arc.tell(), f_size, magickey.get_key()
                 arc.seek(f_size, io.SEEK_CUR)
 
-        def _parser_v3(arc):
+        def _parser_v3(arc, is_fux2pack=False):
             metadata_key_seed = struct.unpack('<I', arc.read(4))[0]
-            metadata_key = (metadata_key_seed * 9 + 3) & 0xffffffff
+            metadata_key = ((metadata_key_seed * 9 + 3) & 0xffffffff) if not is_fux2pack else metadata_key_seed
             self.logger.debug('Using metadata_key=0x%08x', metadata_key)
             xorer = crypto.XORer(arc, crypto.StaticMagicKeyFactory(iv=metadata_key))
             while True:
@@ -110,10 +110,13 @@ class Archive(object):
 
         with open(self.filename, 'rb') as arc:
             # check magic
-            magic, ver = struct.unpack('<6sxB', arc.read(8))
-            if magic != b'RGSSAD' or ver not in (1, 2, 3):
+            magic_raw = arc.read(8)
+            magic, ver = struct.unpack('<6sxB', magic_raw)
+            if (magic != b'RGSSAD' or ver not in (1, 2, 3)) and magic_raw != b'Fux2Pack':
                 self.logger.error('Invalid magic=%s ver=%d', magic, ver)
                 raise RuntimeError('Unsupported file type')
+            elif magic_raw == b'Fux2Pack':
+                yield from _parser_v3(arc, is_fux2pack=True)
             elif ver in (1, 2):
                 yield from _parser_v1(arc)
             elif ver == 3:
